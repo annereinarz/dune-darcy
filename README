@@ -1,0 +1,20 @@
+# dune-darcy - README#
+
+To install run:
+
+dune-common-2.5.1/bin/dunecontrol --builddir=$PWD/build/release/ --opts=release.opts all
+
+in the main Dune folder
+
+Now you can go to build/release/dune-darcy/src to run
+
+./dune-darcy
+
+Initially this will give you a singular matrix as the local operator
+is not being built yet.
+
+Have a look at the file localoperator_darcy.hh and fill in the required
+lines.
+
+If you are having trouble the initial commit contains the solution.
+
