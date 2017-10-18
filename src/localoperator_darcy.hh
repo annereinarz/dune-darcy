@@ -63,12 +63,11 @@ namespace Dune {
                         // evaluate diffusion tensor at cell center, assume it is constant over elements
                         auto ref_el = referenceElement(geo);
                         auto localcenter = ref_el.position(0,0);
+                        //tensor contains the material properties, currently just an identity matrix
                         auto tensor = param.A(cell,localcenter);
 
                         // Initialize vectors outside for loop
                         std::vector<Dune::FieldVector<RF,dim> > gradphi(lfsu.size());
-                        Dune::FieldVector<RF,dim> gradu(0.0);
-                        Dune::FieldVector<RF,dim> Agradu(0.0);
 
                         // Transformation matrix
                         typename EG::Geometry::JacobianInverseTransposed jac;
@@ -84,23 +83,10 @@ namespace Dune {
                             std::vector<JacobianType> js(npe);
                             lfsv.finiteElement().localBasis().evaluateJacobian(ip.position(),js);
 
-                            // evaluate u
-                            RF u=0.0;
-                            for (size_type i=0; i<lfsu.size(); i++)
-                                u += x(lfsu,i)*phi[i];
-
                             // transform gradients of shape functions to real element
                             jac = geo.jacobianInverseTransposed(ip.position());
                             for (size_type i=0; i<lfsu.size(); i++)
                                 jac.mv(js[i][0],gradphi[i]);
-
-                            // compute gradient of u
-                            gradu = 0.0;
-                            for (size_type i=0; i<lfsu.size(); i++)
-                                gradu.axpy(x(lfsu,i),gradphi[i]);
-
-                            // compute A * gradient of u
-                            tensor.mv(gradu,Agradu);
 
                             // evaluate velocity field, sink term and source term
                             auto f = param.f(cell,ip.position());
@@ -110,7 +96,7 @@ namespace Dune {
                             //Accumulate the values at each quadrature point for each degree of freedom
                             //TODO instead of 0.0 add the term needed to evaluate gradphi * A * gradphi -f * phi
                             for (size_type i=0; i<lfsu.size(); i++)
-                                r.accumulate(lfsu,i, ( Agradu*gradphi[i] - f*phi[i] )*factor);
+                                r.accumulate(lfsu,i, 0.0*factor);
                         }
                     } // end alpha_volume
 
