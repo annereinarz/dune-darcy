@@ -90,6 +90,7 @@ Dune::ParameterTree configuration;
 #include <dune/grid/uggrid/uggridfactory.hh>
 #endif
 
+#include "hypreinterface.hh"
 #include "problem_definition.hh"
 #include "localoperator_darcy.hh"
 
@@ -164,10 +165,29 @@ int main(int argc, char** argv)
    V x0(gfs,0.0);
 
    //Set up solver and solve linear system
+   if(configuration.get<bool>("hypre")==false){
    typedef Dune::PDELab::ISTLBackend_NOVLP_CG_AMG_SSOR<GO> NOVLP_AMG;
    NOVLP_AMG ls(go,1000,1);
    Dune::PDELab::StationaryLinearProblemSolver<GO,NOVLP_AMG,V> slp(go,ls,x0,1e-6);
    slp.apply();
+   }
+//Hypre
+   if(configuration.get<bool>("hypre")){
+  HypreParameters hypre_param;
+        /*hypre_param.boomeramg.coarsentype = ;
+        hypre_param.boomeramg.interptype;
+        hypre_param.boomeramg.pmaxelmts;
+        hypre_param.boomeramg.aggnumlevels;
+        hypre_param.boomeramg.relaxtype;
+        hypre_param.boomeramg.relaxorder;
+        hypre_param.boomeramg.strongthreshold;
+        hypre_param.boomeramg.printlevel;
+        hypre_param.boomeramg.maxlevel;
+        hypre_param.boomeramg.coarsesolver;
+        hypre_param.boomeramg.ncoarserelax;*/
+        HypreSolver<GO> solver(go,x0, 1e-6 ,hypre_param);
+        solver.solve(x0);
+  }
 
    // graphics
    typedef Dune::PDELab::DiscreteGridFunction<GFS,V> DGF;
