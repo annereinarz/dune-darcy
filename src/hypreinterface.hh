@@ -53,7 +53,7 @@ class HypreSolver : public Dune::PDELab::LinearResultStorage {
     HYPRE_BoomerAMGCreate(&prec);
     HYPRE_BoomerAMGSetTol(prec,0);
     HYPRE_BoomerAMGSetMaxIter(prec,1);
-    HYPRE_BoomerAMGSetInterpType(prec, hypre_param.boomeramg.interptype); 
+    /*HYPRE_BoomerAMGSetInterpType(prec, hypre_param.boomeramg.interptype); 
     HYPRE_BoomerAMGSetPMaxElmts(prec, hypre_param.boomeramg.pmaxelmts);
     HYPRE_BoomerAMGSetCoarsenType(prec, hypre_param.boomeramg.coarsentype);
     HYPRE_BoomerAMGSetAggNumLevels(prec, hypre_param.boomeramg.aggnumlevels);
@@ -63,7 +63,7 @@ class HypreSolver : public Dune::PDELab::LinearResultStorage {
     HYPRE_BoomerAMGSetCycleNumSweeps(prec, hypre_param.boomeramg.ncoarserelax,3); 
     HYPRE_BoomerAMGSetCycleRelaxType(prec, hypre_param.boomeramg.coarsesolver,3); 
     HYPRE_BoomerAMGSetPrintLevel(prec,hypre_param.boomeramg.printlevel); 
-    HYPRE_BoomerAMGSetStrongThreshold(prec,hypre_param.boomeramg.strongthreshold);
+    HYPRE_BoomerAMGSetStrongThreshold(prec,hypre_param.boomeramg.strongthreshold);*/
     HYPRE_ParCSRPCGCreate(MPI_COMM_WORLD,&solver);
     HYPRE_ParCSRPCGSetTol(solver,tolerance);
     HYPRE_ParCSRPCGSetMaxIter(solver,maxiter);
@@ -123,6 +123,9 @@ class HypreSolver : public Dune::PDELab::LinearResultStorage {
     HYPRE_IJMatrixGetObject(a_hypre,(void **) &a_parcsr); 
     HYPRE_IJVectorGetObject(b_hypre,(void **) &b_parcsr); 
     HYPRE_IJVectorGetObject(u_hypre,(void **) &u_parcsr); 
+
+
+    //HYPRE_IJMatrixPrint(a_hypre, "matrix-out.dat");
     watch.reset();
     HYPRE_ParCSRPCGSetup(solver, a_parcsr, b_parcsr, u_parcsr);
     double timeBoomerAMGSetup = watch.elapsed();
@@ -240,35 +243,29 @@ class HypreSolver : public Dune::PDELab::LinearResultStorage {
                            HYPRE_IJMatrix& hypre_matrix) {
     HYPRE_Int ilower, iupper;
     HYPRE_Int jlower, jupper;
-    ilower = firstIndex;
-    iupper = lastIndex;
-    jlower = ilower;
-    jupper = iupper;
+    ilower = 0;
+    iupper = a.M();
+    jlower = 0;
+    jupper = a.N();
     HYPRE_IJMatrixCreate(gv.comm(), 
                          ilower, iupper,
                          jlower, jupper, 
                          &hypre_matrix);
     HYPRE_IJMatrixSetObjectType(hypre_matrix, HYPRE_PARCSR);
     HYPRE_IJMatrixInitialize(hypre_matrix);
-    typedef typename GV::template Codim<0>::template Partition<Dune::Interior_Partition>::Iterator Iterator;
-    Iterator ibegin = gv.template begin<0,Dune::Interior_Partition>();
-    Iterator iend = gv.template end<0,Dune::Interior_Partition>();
+    using Dune::PDELab::Backend::native;
+    //printmatrix(std::cout, native(a), "b", "b");
     int nrows=1;
     HYPRE_Int ncol=1;
-    for (Iterator it=ibegin;it!=iend;++it) {
-      size_t idx = gv.indexSet().index(*it);
-      //typedef typename Matrix::row_type Row;
-      using Dune::PDELab::Backend::native;
-      auto row = native(a)[idx];
-      HYPRE_Int row_idx = m[idx];
-      //typedef typename Matrix::RowIterator ColIterator;
-      auto icbeg = row.begin();
-      auto icend = row.end();
-      for (auto ict=icbeg;ict!=icend;++ict) {
-        HYPRE_Int col_idx = m[ict.index()];
-        double value = (*ict);
-        HYPRE_IJMatrixSetValues(hypre_matrix,nrows,&ncol,&row_idx,&col_idx,&value);
-      }
+    for (int i_row = 0; i_row < a.M(); i_row++) {
+        for (int i_col = 0; i_col < a.N(); i_col++) {
+            if(native(a).exists(i_row,i_col)){
+                HYPRE_Int row_idx = i_row;
+                HYPRE_Int col_idx = i_col;
+                double value = native(a)[i_row][i_col];
+                HYPRE_IJMatrixSetValues(hypre_matrix,nrows,&ncol,&row_idx,&col_idx,&value);
+            }
+        }
     }
     HYPRE_IJMatrixAssemble(hypre_matrix);
   }
@@ -277,20 +274,16 @@ class HypreSolver : public Dune::PDELab::LinearResultStorage {
  * *************************************************** */
   void AssembleHypreVector(const U& u, 
                            HYPRE_IJVector& u_hypre) {
-    HYPRE_Int jlower = firstIndex;
-    HYPRE_Int jupper = lastIndex;
+    HYPRE_Int jlower = 0;
+    HYPRE_Int jupper = u.N();
     HYPRE_IJVectorCreate(gv.comm(), jlower, jupper, &u_hypre);
     HYPRE_IJVectorSetObjectType(u_hypre, HYPRE_PARCSR);
     HYPRE_IJVectorInitialize(u_hypre);
-    typedef typename GV::template Codim<0>::template Partition<Dune::Interior_Partition>::Iterator Iterator;
-    Iterator ibegin = gv.template begin<0,Dune::Interior_Partition>();
-    Iterator iend = gv.template end<0,Dune::Interior_Partition>();
+    using Dune::PDELab::Backend::native;
     int nvalues=1;
-    for (Iterator it=ibegin;it!=iend;++it) {
-      size_t idx = gv.indexSet().index(*it);
-      HYPRE_Int indices = m[idx];
-      using Dune::PDELab::Backend::native;
-      double values = native(u)[idx];
+    for (int i = 0; i < u.N(); i++) {
+      HYPRE_Int indices = i;
+      double values = native(u)[i];
       HYPRE_IJVectorSetValues(u_hypre, nvalues, &indices, &values); 
     }
     HYPRE_IJVectorAssemble(u_hypre);
@@ -301,19 +294,15 @@ class HypreSolver : public Dune::PDELab::LinearResultStorage {
  * *************************************************** */
   void ReadHypreVector(const HYPRE_IJVector& u_hypre,
                        U& u) {
-    HYPRE_Int jlower = firstIndex;
-    HYPRE_Int jupper = lastIndex;
-    typedef typename GV::template Codim<0>::template Partition<Dune::Interior_Partition>::Iterator Iterator;
-    Iterator ibegin = gv.template begin<0,Dune::Interior_Partition>();
-    Iterator iend = gv.template end<0,Dune::Interior_Partition>();
+    HYPRE_Int jlower = 0;
+    HYPRE_Int jupper = u.N();
     int nvalues=1;
     double values;
-    for (Iterator it=ibegin;it!=iend;++it) {
-      size_t idx = gv.indexSet().index(*it);
-      HYPRE_Int indices = m[idx];
+    using Dune::PDELab::Backend::native;
+    for (int i = 0; i < u.N(); i++) {
+      HYPRE_Int indices = i;
       HYPRE_IJVectorGetValues(u_hypre, nvalues, &indices, &values); 
-      using Dune::PDELab::Backend::native;
-      native(u)[idx] = values;
+      native(u)[i] = values;
     }
   }
 /* *************************************************** *
